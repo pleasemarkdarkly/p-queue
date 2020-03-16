@@ -17,7 +17,7 @@ const timeoutError = new TimeoutError();
 /**
 Promise queue with concurrency control.
 */
-export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsType> = PriorityQueue, EnqueueOptionsType extends QueueAddOptions = DefaultAddOptions> extends EventEmitter<'active'> {
+export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsType> = PriorityQueue, EnqueueOptionsType extends QueueAddOptions = DefaultAddOptions> extends EventEmitter<'active' | "promiseResolved"> {
 	private readonly _carryoverConcurrencyCount: boolean;
 
 	private readonly _isIntervalIgnored: boolean;
@@ -164,7 +164,11 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 			if (this._doesIntervalAllowAnother && this._doesConcurrentAllowAnother) {
 				this.emit('active');
 
-				this._queue.dequeue()!();
+				const dequeued = this._queue.dequeue()!();
+				dequeued.then(result => {
+					return this.emit('promiseResolved', result);
+				});
+
 				if (canInitializeInterval) {
 					this._initializeIntervalIfNeeded();
 				}
@@ -228,10 +232,11 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 	*/
 	async add<TaskResultType>(fn: Task<TaskResultType>, options: Partial<EnqueueOptionsType> = {}): Promise<TaskResultType> {
 		return new Promise<TaskResultType>((resolve, reject) => {
-			const run = async (): Promise<void> => {
+			const run = async (): Promise<void | TaskResultType> => {
 				this._pendingCount++;
 				this._intervalCount++;
 
+				let op;
 				try {
 					const operation = (this._timeout === undefined && options.timeout === undefined) ? fn() : pTimeout(
 						Promise.resolve(fn()),
@@ -244,12 +249,14 @@ export default class PQueue<QueueType extends Queue<RunFunction, EnqueueOptionsT
 							return undefined;
 						}
 					);
-					resolve(await operation);
+					op = await operation;
+					resolve(op);
 				} catch (error) {
 					reject(error);
 				}
 
 				this._next();
+				return op;
 			};
 
 			this._queue.enqueue(run, options);

@@ -1,3 +1,17 @@
+# Fork info
+
+Queue now emits 'promiseFinished' every time a promise within the Queue resolves.
+
+```
+const q = new Queue();
+q.add(asyncFoo);
+q.on('promiseResolved', result => {
+    console.log(result);
+});
+```
+
+by vlopp
+
 # p-queue [![Build Status](https://travis-ci.org/sindresorhus/p-queue.svg?branch=master)](https://travis-ci.org/sindresorhus/p-queue) [![codecov](https://codecov.io/gh/sindresorhus/p-queue/branch/master/graph/badge.svg)](https://codecov.io/gh/sindresorhus/p-queue)
 
 > Promise queue with concurrency control
